@@ -1,8 +1,10 @@
 import { spawn } from 'node:child_process'
 import speakeasy from 'speakeasy'
+import Database from 'better-sqlite3'
 
-const base = 'http://127.0.0.1:3001'
-const env = { ...process.env, PORT: '3001', JWT_SECRET: 'smoke-secret', ADMIN_EMAIL: 'admin@example.com', ADMIN_PASSWORD: 'Admin123!' }
+const port = '3011'
+const base = `http://127.0.0.1:${port}`
+const env = { ...process.env, PORT: port, JWT_SECRET: 'smoke-secret', ADMIN_EMAIL: 'admin@example.com', ADMIN_PASSWORD: 'Admin123!' }
 const child = spawn('node', ['server/index.js'], { env, stdio: ['ignore', 'pipe', 'pipe'] })
 const wait = (ms) => new Promise(r => setTimeout(r, ms))
 async function request(path, options={}) {
@@ -15,7 +17,8 @@ async function request(path, options={}) {
 try {
   for (let i=0;i<50;i++) { try { await request('/api/health'); break } catch { await wait(100) } }
   const login = await request('/api/auth/login', { method:'POST', body: JSON.stringify({ email:'admin@example.com', password:'Admin123!' }) })
-  const otp = speakeasy.totp({ secret: login.setup.secret, encoding:'base32' })
+  const secret = login.setup?.secret || new Database('data.db').prepare('select mfa_secret from users where email=?').get('admin@example.com').mfa_secret
+  const otp = speakeasy.totp({ secret, encoding:'base32' })
   const verified = await request('/api/auth/verify-otp', { method:'POST', body: JSON.stringify({ tempToken: login.tempToken, token: otp }) })
   const auth = { Authorization: `Bearer ${verified.token}` }
   const product = await request('/api/products', { method:'POST', headers: auth, body: JSON.stringify({ name:'Produto Smoke', sku:`SMOKE-${Date.now()}`, price:10.5, stock:2, description:'Criado pelo smoke test' }) })
