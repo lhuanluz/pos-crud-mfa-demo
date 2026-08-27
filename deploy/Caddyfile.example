@@ -1,0 +1,17 @@
+# Exemplo de reverse proxy HTTPS para exposição pública.
+# Troque app.seu-dominio.com.br pelo domínio real antes de usar.
+# O Node deve ficar em 127.0.0.1:3001; exponha publicamente só 80/443.
+
+app.seu-dominio.com.br {
+  encode zstd gzip
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "no-referrer"
+    Permissions-Policy "camera=(), microphone=(), geolocation=()"
+  }
+
+  reverse_proxy 127.0.0.1:3001
+}
