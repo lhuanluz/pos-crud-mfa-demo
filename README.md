@@ -116,19 +116,16 @@ Os workflows ficam em `.github/workflows/`:
 
 ```text
 ci.yml      push/PR para main: npm ci → lint/typecheck → smoke test → build → npm audit → Gitleaks → Docker build
-deploy.yml  somente workflow_dispatch: ambiente protegido production → SSH com chave → Docker Compose → health check
+deploy.yml  após CI verde no main (ou execução manual): ambiente production → SSH com chave → Docker Compose → health check
 ```
 
-Segredos são configurados exclusivamente em **GitHub Actions Secrets** ou Environment Secrets:
+A única credencial configurada em **GitHub Actions Secrets** é:
 
 ```text
-SERVER_HOST
-SERVER_PORT
-SERVER_USER
 SERVER_SSH_PRIVATE_KEY
-SERVER_SSH_KNOWN_HOSTS
-APP_PATH
 ```
+
+IP público, porta SSH, usuário, caminho da aplicação e fingerprint SSH são parâmetros operacionais não secretos, fixados no workflow para reduzir o setup manual.
 
 Nenhuma chave privada, senha, `.env` ou banco local é versionado. Configure `production` em Settings → Environments com required reviewers; sem esse gate no GitHub, o YAML sozinho não impõe aprovação humana. Detalhes em `docs/ci-cd.md`.
 

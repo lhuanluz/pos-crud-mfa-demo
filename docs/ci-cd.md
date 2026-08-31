@@ -1,6 +1,6 @@
 # CI/CD seguro
 
-Este projeto usa GitHub Actions com dois workflows separados: CI automática e deploy manual. A política é simples: qualquer falha em instalação, lint/typecheck, smoke test, build, auditoria de dependências, secret scan ou build Docker bloqueia promoção/deploy.
+Este projeto usa GitHub Actions com CI automática e deploy automático somente após uma CI verde em `main`. A política é simples: qualquer falha em instalação, lint/typecheck, smoke test, build, auditoria de dependências, secret scan ou build Docker bloqueia promoção/deploy.
 
 ## Workflows
 
@@ -31,7 +31,7 @@ Permissões mínimas:
 
 Gatilhos:
 
-- Somente `workflow_dispatch` manual com input `ref`.
+- Automático após CI verde em `main`; `workflow_dispatch` permanece como contingência controlada.
 
 Gate obrigatório:
 
@@ -39,23 +39,20 @@ Gate obrigatório:
 
 Segredos obrigatórios no ambiente/repositório GitHub:
 
-- `SERVER_HOST`: host ou IP do servidor.
-- `SERVER_PORT`: porta SSH; opcional, assume `22` se vazio.
-- `SERVER_USER`: usuário SSH sem privilégio direto de root quando possível.
-- `SERVER_SSH_PRIVATE_KEY`: chave privada de deploy, idealmente exclusiva e com escopo mínimo.
-- `SERVER_SSH_KNOWN_HOSTS`: linha(s) de `known_hosts` do servidor, coletadas previamente com verificação fora de banda.
-- `APP_PATH`: caminho absoluto do clone no servidor.
+- `SERVER_SSH_PRIVATE_KEY`: única credencial do workflow; chave privada exclusiva de deploy, com escopo mínimo.
+
+Host/IP, porta, usuário, caminho da aplicação e fingerprint SSH são parâmetros operacionais públicos/fixos no workflow e não exigem cadastro manual.
 
 Política de segredos:
 
 - Nenhum segredo deve ser gravado em YAML, README, logs ou artefatos.
-- O workflow falha se qualquer segredo obrigatório estiver ausente.
+- O workflow falha se a única chave privada obrigatória estiver ausente.
 - SSH usa `StrictHostKeyChecking=yes`; não use `StrictHostKeyChecking=no` para “resolver rápido”.
 
 ## Política de promoção
 
 - CI deve passar antes de considerar uma versão candidata.
-- Deploy não roda em `push`; é manual e preso ao ambiente protegido `production`.
+- Após CI verde em `main`, o deploy usa exatamente o SHA validado; o ambiente protegido `production` pode exigir aprovação humana se configurado.
 - Falha em qualquer etapa do deploy interrompe a promoção.
 - A validação pública final de TLS/Qualys/PQC é etapa separada de QA depois do endpoint publicado.
 
