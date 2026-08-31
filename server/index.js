@@ -43,7 +43,7 @@ app.use(cors({ origin: isProd ? false : ['http://localhost:5173', 'http://127.0.
 app.use(express.json({ limit: '1mb' }))
 app.use('/api/auth', rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false }))
 
-const db = new Database(path.join(process.cwd(), 'data.db'))
+const db = new Database(process.env.DB_PATH || path.join(process.cwd(), 'data.db'))
 db.pragma('journal_mode = WAL')
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (

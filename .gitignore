@@ -4,3 +4,10 @@ data.db
 .env
 .DS_Store
 npm-debug.log*
+node_modules/
+dist/
+.env.*
+!.env.example
+!.env.docker.example
+data.db-*
+coverage/

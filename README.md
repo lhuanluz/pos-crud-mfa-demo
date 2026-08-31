@@ -17,6 +17,30 @@ Servir como base exposta à internet para uma disciplina de pós-graduação e, 
 - Helmet com headers de segurança e CSP
 - Auditoria de autenticação e CRUD
 
+
+## Docker
+
+O projeto também roda via Docker Compose, com dois containers principais:
+
+- `app`: Node.js em imagem Debian (`node:22-bookworm-slim`), escutando apenas na rede interna Docker.
+- `nginx`: reverse proxy em imagem Debian (`nginx:1.27-bookworm`).
+
+No Mac, o compose local publica somente `127.0.0.1:8088:80`, evitando expor o Mac Studio na rede:
+
+```bash
+cp .env.docker.example .env.docker
+npm run docker:up
+npm run docker:health
+```
+
+Produção em Debian/Ubuntu Server:
+
+```bash
+docker compose -f compose.yml -f compose.prod.yml up -d --build
+```
+
+Detalhes em `deploy/README-Docker.md`.
+
 ## Como rodar localmente
 
 ```bash
