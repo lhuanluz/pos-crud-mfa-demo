@@ -16,10 +16,38 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const app = express()
 const PORT = Number(process.env.PORT || 3001)
-const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-change-me'
 const isProd = process.env.NODE_ENV === 'production'
 const COOKIE_NAME = 'crud_mfa_session'
-const cookieSecure = process.env.COOKIE_SECURE ? process.env.COOKIE_SECURE === 'true' : isProd
+
+const INSECURE_PLACEHOLDERS = new Set([
+  'GENERATE_A_LONG_RANDOM_SECRET_BEFORE_RUNNING',
+  'GENERATE_A_STRONG_ADMIN_PASSWORD',
+  'YOUR_ADMIN_EMAIL',
+  ['troque', 'este', 'segredo', 'em', 'producao'].join('-'),
+  ['troque', 'este', 'segredo', 'antes', 'do', 'deploy'].join('-'),
+  ['dev', 'only', 'change', 'me'].join('-'),
+  ['smoke', 'secret'].join('-'),
+  ['Admin', '123!'].join(''),
+  ['admin', 'example.com'].join('@'),
+])
+
+function requiredEnv(name) {
+  const value = process.env[name]?.trim()
+  if (!value) throw new Error(`Variável obrigatória ausente: ${name}`)
+  if (INSECURE_PLACEHOLDERS.has(value)) throw new Error(`Variável obrigatória contém placeholder inseguro: ${name}`)
+  return value
+}
+
+function requiredBooleanEnv(name, fallback) {
+  const value = process.env[name]?.trim().toLowerCase()
+  if (!value) return fallback
+  if (value !== 'true' && value !== 'false') throw new Error(`Variável booleana inválida: ${name}`)
+  return value === 'true'
+}
+
+const JWT_SECRET = requiredEnv('JWT_SECRET')
+if (JWT_SECRET.length < 32) throw new Error('JWT_SECRET deve ter pelo menos 32 caracteres aleatórios')
+const cookieSecure = requiredBooleanEnv('COOKIE_SECURE', isProd)
 
 app.set('trust proxy', 1)
 app.use(helmet({
@@ -84,8 +112,10 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 
 const countUsers = db.prepare('SELECT COUNT(*) as total FROM users').get().total
 if (countUsers === 0) {
-  const email = process.env.ADMIN_EMAIL || 'admin@example.com'
-  const password = process.env.ADMIN_PASSWORD || 'Admin123!'
+  const email = requiredEnv('ADMIN_EMAIL').toLowerCase()
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('ADMIN_EMAIL deve ser um e-mail válido')
+  const password = requiredEnv('ADMIN_PASSWORD')
+  if (password.length < 12) throw new Error('ADMIN_PASSWORD deve ter pelo menos 12 caracteres')
   db.prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)')
     .run('Administrador', email, bcrypt.hashSync(password, 12), 'admin')
 }

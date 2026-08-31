@@ -1,122 +1,144 @@
 # POS CRUD MFA Demo
 
-Mini aplicação didática com autenticação, MFA OTP/TOTP e CRUD básico de **usuários** e **produtos**.
+Aplicação web didática para a disciplina **Projeto Aplicado: Práticas de Mercado**. Demonstra um fluxo de autenticação com MFA TOTP e CRUD básico, implantado em nuvem pública com controles de Secure by Design e Secure by Default.
 
-## Objetivo
+## Acesso de produção
 
-Servir como base exposta à internet para uma disciplina de pós-graduação e, depois, planejar uma camada de segurança realista sem depender de VPN.
+- Ambiente: Oracle Cloud Free Tier, Ubuntu Server 24.04 LTS
+- Endereço público: `https://147.15.124.129` (após a emissão do certificado IP)
+- Web server: Nginx instalado no host Ubuntu
+- Aplicação: Node.js/Express + React, em Docker
+- Banco demonstrativo: SQLite em volume Docker; não é publicado no repositório nem exposto à internet.
+
+## Arquitetura
+
+```text
+Navegador
+  └─ HTTPS :443
+       └─ Nginx no host Ubuntu
+            └─ 127.0.0.1:3001
+                 └─ container Node/Express + React
+                      └─ volume SQLite
+```
+
+A porta da aplicação (`3001`) é publicada somente no loopback. Na borda, a Oracle Security List e o UFW permitem somente SSH (`22`), HTTP (`80`) e HTTPS (`443`).
 
 ## Stack
 
-- React + Vite + TypeScript
-- Node.js + Express
-- SQLite local (`data.db`) para demo
-- MFA TOTP compatível com Google Authenticator, Microsoft Authenticator, 1Password etc.
-- bcrypt para senha
-- Sessão JWT em **cookie HttpOnly/SameSite**
-- Helmet com headers de segurança e CSP
-- Auditoria de autenticação e CRUD
+- React, Vite e TypeScript
+- Node.js 22 e Express
+- SQLite / `better-sqlite3`
+- Docker Compose
+- Nginx no host Ubuntu
+- Certbot / Let's Encrypt para TLS por endereço IP
+- GitHub Actions para validação e deploy
 
+## Controles de infraestrutura
 
-## Docker
+| Controle | Implementação |
+|---|---|
+| Cloud pública | Oracle Cloud Free Tier com IP público |
+| SO | Ubuntu Server 24.04 LTS |
+| Administração remota | SSH por chave; `PasswordAuthentication no`; `PermitRootLogin no` |
+| Proteção de SSH | Fail2Ban: 4 tentativas em 10 minutos e banimento de 24 horas |
+| Firewall | UFW com entrada apenas para 22, 80 e 443; aplicação em `127.0.0.1:3001` |
+| Web server | Nginx no host como reverse proxy |
+| TLS | Certbot >= 5.4, certificado Let's Encrypt para IP, redirecionamento HTTP → HTTPS |
+| Validação TLS | Qualys SSL Labs: alvo Nota A e suporte PQC |
 
-O projeto também roda via Docker Compose, com dois containers principais:
+## Segurança da aplicação e OWASP Top 10:2025
 
-- `app`: Node.js em imagem Debian (`node:22-bookworm-slim`), escutando apenas na rede interna Docker.
-- `nginx`: reverse proxy em imagem Debian (`nginx:1.27-bookworm`).
+A aplicação mitiga, no mínimo, estas categorias da OWASP Top 10:2025:
 
-No Mac, o compose local publica somente `127.0.0.1:8088:80`, evitando expor o Mac Studio na rede:
+| Categoria | Mitigação aplicada | Evidência no código |
+|---|---|---|
+| **Broken Access Control** | Middleware de sessão e RBAC. Usuários e auditoria exigem perfil `admin`; CRUD de produtos exige autenticação. | `requireAuth`, `requireAdmin` e rotas `/api/users`, `/api/audit`, `/api/products` em `server/index.js` |
+| **Authentication Failures** | Senhas armazenadas com bcrypt (cost 12), MFA TOTP obrigatório após senha, sessão JWT com expiração de 8h em cookie `HttpOnly`/`SameSite`, rate-limit de autenticação e logout que limpa o cookie. | `bcrypt.hashSync`, `/api/auth/login`, `/api/auth/verify-otp`, `setSessionCookie`, `express-rate-limit` em `server/index.js` |
+| **Injection** | Validação e coerção com Zod antes das operações; consultas SQLite parametrizadas; constraints de unicidade e valores não negativos no schema. | `loginSchema`, `userSchema`, `productSchema`, `parse()` e `db.prepare(...).run(...)` em `server/index.js` |
+| **Security Misconfiguration** | Helmet/CSP, `X-Frame-Options`, `nosniff`, segredo JWT obrigatório no startup e credenciais de seed obrigatórias em banco vazio. | Configuração Helmet, `requiredEnv()` e bootstrap em `server/index.js` |
+
+Outros controles: logs de auditoria para login/MFA/logout/CRUD, CORS restrito em produção, cookie `Secure` habilitado no HTTPS e segredo/ambiente real fora do Git.
+
+## Desenvolvimento assistido por IA
+
+O desenvolvimento, depuração, auditoria de código e documentação técnica foram realizados com **Hermes Agent**, um ambiente similar baseado em IA, atendendo ao requisito de codificação assistida por IA. As decisões foram validadas com build TypeScript/Vite, smoke test de API e verificações operacionais no servidor.
+
+## Executar localmente
+
+1. Copie o template e preencha valores aleatórios fortes. Nunca versione o arquivo criado.
 
 ```bash
-cp .env.docker.example .env.docker
-npm run docker:up
-npm run docker:health
-```
-
-Produção em Debian/Ubuntu Server:
-
-```bash
-docker compose -f compose.yml -f compose.prod.yml up -d --build
-```
-
-Detalhes em `deploy/README-Docker.md`.
-
-## Como rodar localmente
-
-```bash
-npm install
 cp .env.example .env
+openssl rand -base64 48  # use a saída em JWT_SECRET
+# edite JWT_SECRET, ADMIN_EMAIL e ADMIN_PASSWORD
+npm ci
 npm run build
 npm start
 ```
 
-Acesse: http://localhost:3001
+A aplicação falha ao iniciar se `JWT_SECRET` estiver ausente, tiver menos de 32 caracteres ou ainda contiver placeholder/valor didático antigo. Se o banco estiver vazio, `ADMIN_EMAIL` e `ADMIN_PASSWORD` também são obrigatórios; `ADMIN_EMAIL` precisa ser um e-mail válido e `ADMIN_PASSWORD` precisa ter pelo menos 12 caracteres. Não existem credenciais padrão em runtime.
 
-Credencial inicial:
-
-- E-mail: `admin@example.com`
-- Senha: `Admin123!`
-
-No primeiro login o sistema exibirá QR Code/secret para configurar MFA OTP.
-
-## Scripts
+### Docker local
 
 ```bash
-npm run dev     # API em :3001 + Vite em :5173
-npm run build   # typecheck + build frontend
-npm start       # produção local, Express serve dist/
-npm run smoke   # teste API com login, cookie HttpOnly, OTP, CRUD e auditoria
+cp .env.docker.example .env.docker
+# edite as três variáveis obrigatórias
+npm run docker:up
+npm run docker:health
 ```
 
-## Funcionalidades
+O compose local publica apenas `127.0.0.1:8088`, portanto não expõe o Mac na rede local.
 
-- Login com senha + MFA OTP obrigatório.
-- Setup inicial de MFA no primeiro login.
-- Sessão protegida por cookie HttpOnly/SameSite; o frontend não salva JWT em localStorage.
-- Logout server-side com limpeza do cookie.
-- CRUD de usuários com perfil `admin` ou `operator`.
-- CRUD de produtos.
-- Aba **Auditoria** com últimos 100 eventos para admin.
-- Página interna **Arquitetura** com inventário de controles e diagrama simples.
+## Scripts e verificações
 
-## Controles já implementados
+```bash
+npm run lint            # typecheck estrito sem emitir arquivos
+npm test                # smoke test: health, login/MFA, cookie HttpOnly, CRUD e auditoria
+npm run build           # typecheck e build do frontend
+npm run security:audit  # npm audit bloqueando vulnerabilidades high/critical
+```
 
-- Senhas com bcrypt.
-- MFA TOTP.
-- JWT de sessão em cookie HttpOnly/SameSite.
-- Cookie `Secure` habilitável via `COOKIE_SECURE=true` para HTTPS.
-- RBAC básico: usuários e auditoria apenas para `admin`.
-- Validação de entrada com Zod.
-- Rate limit em `/api/auth`.
-- Constraints SQLite para unicidade e valores não negativos.
-- Helmet com CSP e headers de segurança.
-- Auditoria de login, falhas de login/MFA, logout e CRUDs.
+O smoke test cria dados isolados e credenciais aleatórias apenas para sua execução.
 
-## Diagrama resumido
+## Deploy de produção
+
+No servidor, o arquivo `.env.docker` tem permissão restrita e não é commitado. Use um cofre de segredos ou o mecanismo protegido do provedor para armazenar `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` e chaves SSH; em arquivo local, aplique `chmod 600 .env.docker`. Para rotação, gere novo `JWT_SECRET`, atualize o segredo no cofre/servidor, recrie o container e invalide sessões antigas. O Nginx do host encaminha para a app Docker apenas no loopback:
+
+```bash
+docker compose -f compose.yml -f compose.host-nginx.yml --env-file .env.docker up -d --build app
+```
+
+O arquivo `compose.host-nginx.yml` é o modo oficial de produção. `compose.prod.yml` permanece como exemplo de proxy em container para desenvolvimento/referência, mas não é usado na VM da entrega.
+
+## CI/CD com GitHub Actions
+
+Os workflows ficam em `.github/workflows/`:
 
 ```text
-Professor/Navegador -> Reverse Proxy HTTPS -> Express API + React SPA -> SQLite
+ci.yml      push/PR para main: npm ci → lint/typecheck → smoke test → build → npm audit → Gitleaks → Docker build
+deploy.yml  CI verde em main ou workflow_dispatch: ambiente protegido production → SSH com chave → Docker Compose → health check
 ```
 
-A documentação detalhada fica dentro da área logada, na aba **Arquitetura**.
+Segredos são configurados exclusivamente em **GitHub Actions Secrets** ou Environment Secrets:
 
-## Exposição pública com HTTPS
+```text
+SERVER_HOST
+SERVER_PORT
+SERVER_USER
+SERVER_SSH_PRIVATE_KEY
+SERVER_SSH_KNOWN_HOSTS
+APP_PATH
+```
 
-Existe um exemplo em `deploy/Caddyfile.example`.
+Nenhuma chave privada, senha, `.env` ou banco local é versionado. Configure `production` em Settings → Environments com required reviewers; sem esse gate no GitHub, o YAML sozinho não impõe aprovação humana. Detalhes em `docs/ci-cd.md`.
 
-Recomendação para publicação:
+## Higiene do repositório
 
-- Node escutando localmente em `127.0.0.1:3001`.
-- Publicar apenas `80/TCP` e `443/TCP` no roteador/firewall.
-- Usar Caddy/Nginx como reverse proxy com TLS válido.
-- Definir `COOKIE_SECURE=true` quando o acesso for HTTPS.
-- Não expor banco ou porta direta da aplicação.
+O `.gitignore` bloqueia `.env`, `.env.*`, bancos SQLite, `node_modules`, `dist` e arquivos de cobertura. Apenas templates sem valores reais (`.env.example` e `.env.docker.example`) são versionados.
 
-## Ainda recomendado para evolução
+## Evidências finais a registrar
 
-- PostgreSQL com backups no lugar do SQLite para produção real.
-- CSRF token se a política de cookies for ampliada ou se houver integrações cross-site.
-- Lockout por conta/IP e alertas.
-- Logs estruturados centralizados.
-- Pipeline com SAST/dependency scan.
-- Checklist OWASP ASVS para o relatório final.
+- URL HTTPS acessível e redirecionamento HTTP → HTTPS;
+- saída de `sudo nginx -t`, `sudo ufw status numbered` e `sudo fail2ban-client status sshd`;
+- execução verde do GitHub Actions após um push real;
+- relatório Qualys SSL Labs com nota A e indicação de PQC.

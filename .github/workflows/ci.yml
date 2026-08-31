@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Install, lint, test, build and scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install reproducible dependencies
+        run: npm ci
+
+      - name: Lint / typecheck
+        run: npm run lint
+
+      - name: Test smoke flow
+        run: npm test
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Dependency audit
+        run: npm run security:audit
+
+      - name: Secret scan with Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker image build check
+        run: docker build --pull --no-cache --tag pos-crud-mfa-demo:ci .

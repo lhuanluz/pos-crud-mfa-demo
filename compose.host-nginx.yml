@@ -1,0 +1,6 @@
+services:
+  app:
+    # Public reverse proxy: Nginx installed on the Ubuntu host.
+    # The application is only reachable from that host.
+    ports:
+      - "127.0.0.1:3001:3001"

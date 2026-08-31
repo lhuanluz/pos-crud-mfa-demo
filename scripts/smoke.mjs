@@ -1,10 +1,16 @@
 import { spawn } from 'node:child_process'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
 import speakeasy from 'speakeasy'
 import Database from 'better-sqlite3'
 
 const port = '3011'
 const base = `http://127.0.0.1:${port}`
-const env = { ...process.env, PORT: port, JWT_SECRET: 'smoke-secret', ADMIN_EMAIL: 'admin@example.com', ADMIN_PASSWORD: 'Admin123!', COOKIE_SECURE: 'false' }
+const smokePassword = `Smoke-${crypto.randomUUID()}!`
+const smokeDir = mkdtempSync(path.join(tmpdir(), 'pos-crud-mfa-smoke-'))
+const smokeDbPath = path.join(smokeDir, 'data.db')
+const env = { ...process.env, PORT: port, DB_PATH: smokeDbPath, JWT_SECRET: crypto.randomUUID(), ADMIN_EMAIL: 'admin@example.test', ADMIN_PASSWORD: smokePassword, COOKIE_SECURE: 'false' }
 const child = spawn('node', ['server/index.js'], { env, stdio: ['ignore', 'pipe', 'pipe'] })
 let cookie = ''
 const wait = (ms) => new Promise(r => setTimeout(r, ms))
@@ -19,8 +25,8 @@ async function request(path, options={}) {
 }
 try {
   for (let i=0;i<50;i++) { try { await request('/api/health'); break } catch { await wait(100) } }
-  const login = await request('/api/auth/login', { method:'POST', body: JSON.stringify({ email:'admin@example.com', password:'Admin123!' }) })
-  const secret = login.setup?.secret || new Database('data.db').prepare('select mfa_secret from users where email=?').get('admin@example.com').mfa_secret
+  const login = await request('/api/auth/login', { method:'POST', body: JSON.stringify({ email:env.ADMIN_EMAIL, password:smokePassword }) })
+  const secret = login.setup?.secret || new Database(smokeDbPath).prepare('select mfa_secret from users where email=?').get(env.ADMIN_EMAIL).mfa_secret
   const otp = speakeasy.totp({ secret, encoding:'base32' })
   const verified = await request('/api/auth/verify-otp', { method:'POST', body: JSON.stringify({ tempToken: login.tempToken, token: otp }) })
   if (!cookie.startsWith('crud_mfa_session=')) throw new Error('session cookie was not set')
@@ -33,4 +39,5 @@ try {
   console.log(JSON.stringify({ health:'ok', loginMfa: login.mfaRequired, httpOnlyCookie: true, productCrud:'ok', userCount:users.length, auditEvents:audit.length, updatedPrice:updated.price }, null, 2))
 } finally {
   child.kill('SIGTERM')
+  rmSync(smokeDir, { recursive: true, force: true })
 }

@@ -1,0 +1,92 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref, branch or commit SHA to deploy
+        required: true
+        default: main
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      github.event_name == 'workflow_dispatch'
+    name: Deploy the CI-validated revision to Oracle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+    steps:
+      - name: Validate required deployment secrets
+        shell: bash
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+          SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
+          APP_PATH: ${{ secrets.APP_PATH }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in SERVER_HOST SERVER_USER SERVER_SSH_PRIVATE_KEY SERVER_SSH_KNOWN_HOSTS APP_PATH; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required GitHub Secret: ${name}" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Configure ephemeral SSH credentials
+        shell: bash
+        env:
+          SERVER_SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+          SERVER_SSH_KNOWN_HOSTS: ${{ secrets.SERVER_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SERVER_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$SERVER_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy exact validated revision and run health check
+        shell: bash
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          APP_PATH: ${{ secrets.APP_PATH }}
+          DEPLOY_REF: ${{ github.event.workflow_run.head_sha || inputs.ref }}
+        run: |
+          set -euo pipefail
+          printf -v remote_app_path '%q' "$APP_PATH"
+          printf -v remote_deploy_ref '%q' "$DEPLOY_REF"
+          ssh -i ~/.ssh/deploy_key -p "${SERVER_PORT:-22}" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$SERVER_USER@$SERVER_HOST" \
+            "APP_PATH=$remote_app_path DEPLOY_REF=$remote_deploy_ref bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$APP_PATH"
+          git fetch --prune origin
+          git cat-file -e "${DEPLOY_REF}^{commit}"
+          git reset --hard "$DEPLOY_REF"
+          sudo docker compose -f compose.yml -f compose.host-nginx.yml --env-file .env.docker up -d --build app
+          curl -fsS --max-time 15 http://127.0.0.1:3001/api/health
+          REMOTE
+
+      - name: Remove ephemeral private key
+        if: always()
+        shell: bash
+        run: rm -f ~/.ssh/deploy_key ~/.ssh/known_hosts
