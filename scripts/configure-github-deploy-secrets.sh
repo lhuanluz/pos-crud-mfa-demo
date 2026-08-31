@@ -7,12 +7,11 @@ REPOSITORY="lhuanluz/pos-crud-mfa-demo"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PRIVATE_KEY="$HOME/.ssh/pos-crud-mfa-actions_ed25519"
 
-# The inherited integration token can push code but cannot manage Actions
-# Secrets. Do not let it shadow a personal GitHub CLI authentication.
-unset GH_TOKEN GITHUB_TOKEN
-
+# The terminal injects an integration GH_TOKEN into child processes. Keeping
+# these variables explicitly empty (rather than unsetting them) prevents that
+# token from shadowing the user's stored GitHub CLI login.
 gh_personal() {
-  env -u GH_TOKEN -u GITHUB_TOKEN command gh "$@"
+  GH_TOKEN='' GITHUB_TOKEN='' gh "$@"
 }
 
 KNOWN_HOSTS="$HOME/.ssh/pos-crud-mfa-actions_known_hosts"
