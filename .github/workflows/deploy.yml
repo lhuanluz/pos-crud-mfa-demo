@@ -1,6 +1,10 @@
 name: Deploy production
 
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
     inputs:
       ref:
@@ -17,7 +21,10 @@ permissions:
 
 jobs:
   deploy:
-    name: Deploy selected revision to Oracle
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      github.event_name == 'workflow_dispatch'
+    name: Deploy CI-validated revision to Oracle
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: production
@@ -61,7 +68,7 @@ jobs:
           SERVER_PORT: ${{ secrets.SERVER_PORT }}
           SERVER_USER: ${{ secrets.SERVER_USER }}
           APP_PATH: ${{ secrets.APP_PATH }}
-          DEPLOY_REF: ${{ inputs.ref }}
+          DEPLOY_REF: ${{ github.event.workflow_run.head_sha || inputs.ref }}
         run: |
           set -euo pipefail
           printf -v remote_app_path '%q' "$APP_PATH"
