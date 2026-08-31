@@ -6,6 +6,11 @@ set -euo pipefail
 REPOSITORY="lhuanluz/pos-crud-mfa-demo"
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PRIVATE_KEY="$HOME/.ssh/pos-crud-mfa-actions_ed25519"
+
+# The inherited integration token can push code but cannot manage Actions
+# Secrets. Do not let it shadow a personal GitHub CLI authentication.
+unset GH_TOKEN GITHUB_TOKEN
+
 KNOWN_HOSTS="$HOME/.ssh/pos-crud-mfa-actions_known_hosts"
 
 for file in "$PRIVATE_KEY" "$KNOWN_HOSTS"; do
