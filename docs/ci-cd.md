@@ -31,12 +31,11 @@ Permissões mínimas:
 
 Gatilhos:
 
-- Automático: conclusão verde do workflow `CI` em `main`, usando o SHA exato que foi validado.
-- Manual: `workflow_dispatch` para recuperação controlada de um ref explícito.
+- Somente `workflow_dispatch` manual com input `ref`.
 
 Gate obrigatório:
 
-- O job usa `environment: production`. Configure no GitHub: Settings → Environments → `production` → required reviewers e, se aplicável, wait timer. Sem esse gate configurado no repositório, o YAML não consegue impor aprovação humana sozinho. Na prática, o deploy só promove revisão validada pelo CI depois da aprovação do ambiente protegido.
+- O job usa `environment: production`. Configure no GitHub: Settings → Environments → `production` → required reviewers e, se aplicável, wait timer. Sem esse gate configurado no repositório, o YAML não consegue impor aprovação humana sozinho.
 
 Segredos obrigatórios no ambiente/repositório GitHub:
 
@@ -56,7 +55,7 @@ Política de segredos:
 ## Política de promoção
 
 - CI deve passar antes de considerar uma versão candidata.
-- Todo push em `main` passa pela CI e, se verde, dispara automaticamente o deploy do SHA validado. O ambiente `production` pode exigir revisão humana adicional no GitHub.
+- Deploy não roda em `push`; é manual e preso ao ambiente protegido `production`.
 - Falha em qualquer etapa do deploy interrompe a promoção.
 - A validação pública final de TLS/Qualys/PQC é etapa separada de QA depois do endpoint publicado.
 
