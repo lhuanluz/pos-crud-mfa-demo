@@ -63,6 +63,11 @@ jobs:
             '|1|DaoVt6nBelMPnAdbJZtNV431Lzs=|O7SpQiKJrW5JYNlIfHQ/muF06Ds= ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBCl5YMd/AuQZSGhQ7zdDl1cIxZLINY/9KtOedJgAQvtXbuOt06IbwodBfDXRq8XW30jhdMKUvPfW0MxPfcckX5Q=' \
             '|1|0aBokjgUbVQc/9LtbcuvQVnJt+g=|OXnsykY00KPO3b0dGvLHGEFHVP0= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJcaB9TithhblxXQhw2C/sw5DQBV5rXzUwZ5wJer9gmZ' > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
+      - name: Verify SSH authentication
+        run: |
+          set -euo pipefail
+          ssh-keygen -y -f ~/.ssh/deploy_key >/dev/null
+          ssh -i ~/.ssh/deploy_key -p 22 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes ubuntu@147.15.124.129 'printf ssh_auth_ok'
       - name: Deploy exact validated revision and run health check
         env:
           DEPLOY_REF: ${{ github.sha }}
