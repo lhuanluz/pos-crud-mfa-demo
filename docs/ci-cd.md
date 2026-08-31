@@ -75,10 +75,14 @@ docker build --pull --no-cache --tag pos-crud-mfa-demo:ci .
 
 Validações locais executadas em 2026-08-31:
 
-- `npm ci`: passou.
-- `npm run lint`: passou.
-- `npm test`: passou.
-- `npm run build`: passou.
+- `npm ci`: passou, 278 pacotes instalados, 0 vulnerabilidades.
+- `npm run lint`: passou (`tsc --noEmit`).
+- `npm test`: passou; smoke retornou `health: ok`, `loginMfa: true`, `httpOnlyCookie: true`, `productCrud: ok`, `auditEvents: 6`.
+- `npm run build`: passou; bundle Vite gerado.
 - `npm run security:audit`: passou com 0 vulnerabilidades.
-- `docker build --pull --no-cache --tag pos-crud-mfa-demo:ci .`: a executar/registrar conforme ambiente Docker local disponível.
-- Validação sintática dos YAMLs via Ruby Psych: a executar/registrar.
+- Validação sintática dos YAMLs via Ruby Psych: `ci.yml` e `deploy.yml` carregaram sem erro.
+
+Validações reais no GitHub Actions em 2026-08-31:
+
+- Run CI `33402917384`: sucesso. Job “Install, lint, test, build and scan” passou em `npm ci`, lint/typecheck, smoke test, build, dependency audit, Gitleaks e Docker image build check.
+- Run Deploy `33402996798`: falhou antes de qualquer SSH/deploy porque os secrets obrigatórios (`SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_PRIVATE_KEY`, `SERVER_SSH_KNOWN_HOSTS`, `APP_PATH`) não estavam configurados no ambiente/repositório. Isso bloqueou promoção sem expor credenciais.
