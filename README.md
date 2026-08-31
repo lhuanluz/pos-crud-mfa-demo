@@ -115,8 +115,7 @@ O arquivo `compose.host-nginx.yml` é o modo oficial de produção. `compose.pro
 Os workflows ficam em `.github/workflows/`:
 
 ```text
-ci.yml      push/PR para main: npm ci → lint/typecheck → smoke test → build → npm audit → Gitleaks → Docker build
-deploy.yml  após CI verde no main (ou execução manual): ambiente production → SSH com chave → Docker Compose → health check
+ci.yml      push/PR para main: validação completa; em push no main e validação verde, deploy Oracle automático
 ```
 
 A única credencial configurada em **GitHub Actions Secrets** é:

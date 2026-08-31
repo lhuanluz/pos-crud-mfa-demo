@@ -1,6 +1,6 @@
 # CI/CD seguro
 
-Este projeto usa GitHub Actions com CI automática e deploy automático somente após uma CI verde em `main`. A política é simples: qualquer falha em instalação, lint/typecheck, smoke test, build, auditoria de dependências, secret scan ou build Docker bloqueia promoção/deploy.
+Este projeto usa um único workflow GitHub Actions: CI automática e deploy automático somente após validação verde em push para `main`. A política é simples: qualquer falha em instalação, lint/typecheck, smoke test, build, auditoria de dependências, secret scan ou build Docker bloqueia promoção/deploy.
 
 ## Workflows
 
@@ -27,11 +27,11 @@ Permissões mínimas:
 - `contents: read`.
 - O checkout usa `persist-credentials: false`.
 
-### `.github/workflows/deploy.yml`
+### Job `deploy` em `.github/workflows/ci.yml`
 
 Gatilhos:
 
-- Automático após CI verde em `main`; `workflow_dispatch` permanece como contingência controlada.
+- Automático somente depois do job `validate` passar em um push para `main`.
 
 Gate obrigatório:
 
