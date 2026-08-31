@@ -116,7 +116,7 @@ Os workflows ficam em `.github/workflows/`:
 
 ```text
 ci.yml      push/PR para main: npm ci → lint/typecheck → smoke test → build → npm audit → Gitleaks → Docker build
-deploy.yml  CI verde em main ou workflow_dispatch: ambiente protegido production → SSH com chave → Docker Compose → health check
+deploy.yml  somente workflow_dispatch: ambiente protegido production → SSH com chave → Docker Compose → health check
 ```
 
 Segredos são configurados exclusivamente em **GitHub Actions Secrets** ou Environment Secrets:
