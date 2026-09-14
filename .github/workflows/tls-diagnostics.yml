@@ -47,6 +47,8 @@ jobs:
           systemctl list-timers snap.certbot.renew.timer --no-pager || true
           echo '== nginx TLS configuration =='
           sudo nginx -T 2>&1 | grep -E 'ssl_(protocols|ciphers|ecdh_curve|certificate)' || true
+          echo '== active nginx virtual-host configuration =='
+          sudo grep -R --include='*.conf' -E '^[[:space:]]*(server|listen|server_name|location|proxy_pass|ssl_|return|root)' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true
           REMOTE
       - name: Remove ephemeral private key
         if: always()
