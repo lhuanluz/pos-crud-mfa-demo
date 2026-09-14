@@ -137,4 +137,5 @@ O `.gitignore` bloqueia `.env`, `.env.*`, bancos SQLite, `node_modules`, `dist` 
 - URL HTTPS acessível e redirecionamento HTTP → HTTPS;
 - saída de `sudo nginx -t`, `sudo ufw status numbered` e `sudo fail2ban-client status sshd`;
 - execução verde do GitHub Actions após um push real;
-- relatório Qualys SSL Labs com nota A e indicação de PQC.
+- relatório do SSL.org para o IP com `Certificate Trusted: YES` e assinatura aceitável;
+- resultado do DigiCert PQC Checker para o IP, além da evidência técnica versionada em `docs/tls-evidence-ip.md`;

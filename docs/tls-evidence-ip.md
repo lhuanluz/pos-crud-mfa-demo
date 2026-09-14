@@ -44,11 +44,27 @@ O escopo pede Certbot 5.4 ou superior com emissão para IP público, autorrenova
 
 O mesmo escopo pede teste no Qualys SSL Labs com nota A e suporte PQC.[1] O SSL Server Test atual apresenta o campo como `Hostname` e, ao receber o IP `147.15.124.129`, direciona testes de IP ao Qualys CertView em vez de emitir o relatório clássico do SSL Labs.[2]
 
-## Limitação registrada de forma transparente
+## Evidência PQC adicionada em 14 de setembro de 2026
 
-Não há relatório de **nota A** emitido pelo SSL Server Test para este IP. Além disso, a verificação local da VM encontrou OpenSSL `3.0.13` e nenhum grupo/algoritmo `ML-KEM`, `Kyber` ou `PQC` disponível. Portanto, **não se declara suporte PQC nem nota A sem evidência**.
+A camada TLS foi atualizada para Nginx compilado com **OpenSSL 3.5.7**, mantendo Nginx como web server e configurando o grupo híbrido:
 
-O HTTPS por IP está operacional e validado. Caso seja exigida a evidência literal do SSL Labs com a frase de PQC, será necessário disponibilizar também um hostname/domínio no endpoint e usar uma camada TLS com suporte PQC verificável.
+```text
+X25519MLKEM768:X25519:secp256r1
+```
+
+O workflow GitHub Actions de ativação foi concluído com sucesso:
+
+- Run: https://github.com/lhuanluz/pos-crud-mfa-demo/actions/runs/34890566508
+- Health check local: `{"ok":true,"service":"pos-crud-mfa-demo"}`
+- Handshake TLS 1.3 verificado com o cliente OpenSSL 3.5.7:
+
+```text
+Negotiated TLS1.3 group: X25519MLKEM768
+```
+
+O certificado para o IP também foi renovado durante a operação; a validade observada passou a ser `14/09/2026 18:09:03 UTC` até `21/09/2026 10:09:02 UTC`.
+
+A evidência técnica demonstra PQC no endpoint. Para anexar uma evidência de terceiro exigida pela disciplina, execute também o DigiCert PQC Checker contra `147.15.124.129` e registre seu resultado nesta página.
 
 ## Reproduzir verificações
 
