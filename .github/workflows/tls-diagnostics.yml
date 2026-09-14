@@ -49,8 +49,8 @@ jobs:
           sudo nginx -T 2>&1 | grep -E 'ssl_(protocols|ciphers|ecdh_curve|certificate)' || true
           echo '== recent nginx service events =='
           sudo journalctl -u nginx -n 80 --no-pager || true
-          echo '== enabled dynamic modules =='
-          sudo python3 -c "from pathlib import Path; [print(path.name, path.read_text().strip()) for path in sorted(Path('/etc/nginx/modules-enabled').glob('*.conf'))]"
+          echo '== retained custom TLS build artifacts =='
+          sudo python3 -c "from pathlib import Path; [print(str(p)) for p in Path('/opt/pqc-nginx-build').rglob('openssl') if p.is_file() and p.stat().st_mode & 0o111]"
           REMOTE
       - name: Remove ephemeral private key
         if: always()
