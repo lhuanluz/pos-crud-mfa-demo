@@ -1,0 +1,53 @@
+name: TLS diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    name: Inspect TLS capability without changing the VM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Configure ephemeral SSH credentials
+        env:
+          SERVER_SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SERVER_SSH_PRIVATE_KEY" || { echo "Missing GitHub Secret: SERVER_SSH_PRIVATE_KEY" >&2; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SERVER_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' \
+            '|1|y8UuPfnWkXQ9IIxPz4a0KXbKazE=|yLX1U0k1Y33Q6dVApiq3LhQ5Y2A= ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCFfuOwrRqSbFwAvt2ZfdS91E6UsZXYLud4cnt7YNFhf/qwewFlxcpJTQ4z1bV1LswrFpBvObfkRgwkjNQPUfhyCxcuzI5fnk+il+YMUfa1Wg+EDIc2cryj78rpjQOOEarq1ZZgVPrE0GxtAE2dKDhWaZ9Oupyc/Az0XOuV7K5sJruXzxt7QF1cMO4hTtmRtECboVA0A59kyxLpcwKEy5neRbYk1QH3ttbbZVZPs4GnIpXKxGee6mFp/gkfm1n2quGMVOa9SYONK2HPwy/zG6nWa7PlbcW/a15LL0+qvBPkeE3e3XhBvMgTakrlmhB3lUQyStH6yvBR7r/JTuZpwF6gYPBgBjxqvSW9b5c9fhh5wvLRu0/PVogeAtRFetezv/wICKkdGAg4If8ANjH6UcG8Zyxap8NmZ+suQWhDXmOXOY2VpZCE6QljMx/oXmj6Fn+FZ3f1qCLkyt9tsSmRMu+6rSHwdYxTXQ9OExzKcBL7YatjW71sm57jtsNU/fIXiC8=' \
+            '|1|DaoVt6nBelMPnAdbJZtNV431Lzs=|O7SpQiKJrW5JYNlIfHQ/muF06Ds= ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAABBBCl5YMd/AuQZSGhQ7zdDl1cIxZLINY/9KtOedJgAQvtXbuOt06IbwodBfDXRq8XW30jhdMKUvPfW0MxPfcckX5Q=' \
+            '|1|0aBokjgUbVQc/9LtbcuvQVnJt+g=|OXnsykY00KPO3b0dGvLHGEFHVP0= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJcaB9TithhblxXQhw2C/sw5DQBV5rXzUwZ5wJer9gmZ' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Collect non-sensitive TLS diagnostics
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes ubuntu@147.15.124.129 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          echo '== operating system =='
+          . /etc/os-release
+          printf '%s %s\n' "$PRETTY_NAME" "$(uname -r)"
+          echo '== TLS binaries =='
+          openssl version -a | head -n 4
+          nginx -V 2>&1
+          echo '== PQC group availability =='
+          openssl list -groups 2>/dev/null | grep -Ei 'mlkem|kyber|pqc' || true
+          echo '== certificate =='
+          sudo certbot certificates
+          echo '== renewal timer =='
+          systemctl is-active snap.certbot.renew.timer || true
+          systemctl list-timers snap.certbot.renew.timer --no-pager || true
+          echo '== nginx TLS configuration =='
+          sudo nginx -T 2>&1 | grep -E 'ssl_(protocols|ciphers|ecdh_curve|certificate)' || true
+          REMOTE
+      - name: Remove ephemeral private key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key ~/.ssh/known_hosts
