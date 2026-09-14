@@ -49,6 +49,7 @@ jobs:
             exit "$status"
           }
           trap rollback ERR
+          if [ ! -x /usr/local/sbin/nginx-pqc ] || [ ! -x "$BUILD_ROOT/openssl-${OPENSSL_VERSION}/apps/openssl" ]; then
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential ca-certificates curl libpcre2-dev perl zlib1g-dev
           sudo rm -rf "$BUILD_ROOT"
@@ -81,6 +82,7 @@ jobs:
             --with-http_stub_status_module --with-http_auth_request_module --with-threads --with-pcre-jit
           make -j2
           sudo install -m 755 objs/nginx /usr/local/sbin/nginx-pqc
+          fi
           /usr/local/sbin/nginx-pqc -V 2>&1 | grep -F "OpenSSL ${OPENSSL_VERSION}"
           sudo install -d -m 755 /etc/nginx/conf.d /etc/systemd/system/nginx.service.d
           printf '%s\n' 'ssl_ecdh_curve X25519MLKEM768:X25519:secp256r1;' | sudo tee "$PQC_CONF" >/dev/null
