@@ -47,8 +47,10 @@ jobs:
           systemctl list-timers snap.certbot.renew.timer --no-pager || true
           echo '== nginx TLS configuration =='
           sudo nginx -T 2>&1 | grep -E 'ssl_(protocols|ciphers|ecdh_curve|certificate)' || true
-          echo '== active nginx virtual-host configuration =='
-          sudo grep -R --include='*.conf' -E '^[[:space:]]*(server|listen|server_name|location|proxy_pass|ssl_|return|root)' /etc/nginx/sites-enabled /etc/nginx/conf.d 2>/dev/null || true
+          echo '== recent nginx service events =='
+          sudo journalctl -u nginx -n 80 --no-pager || true
+          echo '== enabled dynamic modules =='
+          sudo python3 -c "from pathlib import Path; [print(path.name, path.read_text().strip()) for path in sorted(Path('/etc/nginx/modules-enabled').glob('*.conf'))]"
           REMOTE
       - name: Remove ephemeral private key
         if: always()
