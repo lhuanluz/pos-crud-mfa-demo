@@ -1,0 +1,108 @@
+name: Upgrade Nginx TLS with PQC
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    name: Build and activate PQC-capable Nginx
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+    steps:
+      - name: Configure ephemeral SSH credentials
+        env:
+          SERVER_SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SERVER_SSH_PRIVATE_KEY" || { echo "Missing GitHub Secret: SERVER_SSH_PRIVATE_KEY" >&2; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SERVER_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' \
+            '|1|y8UuPfnWkXQ9IIxPz4a0KXbKazE=|yLX1U0k1Y33Q6dVApiq3LhQ5Y2A= ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCFfuOwrRqSbFwAvt2ZfdS91E6UsZXYLud4cnt7YNFhf/qwewFlxcpJTQ4z1bV1LswrFpBvObfkRgwkjNQPUfhyCxcuzI5fnk+il+YMUfa1Wg+EDIc2cryj78rpjQOOEarq1ZZgVPrE0GxtAE2dKDhWaZ9Oupyc/Az0XOuV7K5sJruXzxt7QF1cMO4hTtmRtECboVA0A59kyxLpcwKEy5neRbYk1QH3ttbbZVZPs4GnIpXKxGee6mFp/gkfm1n2quGMVOa9SYONK2HPwy/zG6nWa7PlbcW/a15LL0+qvBPkeE3e3XhBvMgTakrlmhB3lUQyStH6yvBR7r/JTuZpwF6gYPBgBjxqvSW9b5c9fhh5wvLRu0/PVogeAtRFetezv/wICKkdGAg4If8ANjH6UcG8Zyxap8NmZ+suQWhDXmOXOY2VpZCE6QljMx/oXmj6Fn+FZ3f1qCLkyt9tsSmRMu+6rSHwdYxTXQ9OExzKcBL7YatjW71sm57jtsNU/fIXiC8=' \
+            '|1|DaoVt6nBelMPnAdbJZtNV431Lzs=|O7SpQiKJrW5JYNlIfHQ/muF06Ds= ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAABBBCl5YMd/AuQZSGhQ7zdDl1cIxZLINY/9KtOedJgAQvtXbuOt06IbwodBfDXRq8XW30jhdMKUvPfW0MxPfcckX5Q=' \
+            '|1|0aBokjgUbVQc/9LtbcuvQVnJt+g=|OXnsykY00KPO3b0dGvLHGEFHVP0= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJcaB9TithhblxXQhw2C/sw5DQBV5rXzUwZ5wJer9gmZ' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Build, activate, and self-test with rollback on failure
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes ubuntu@147.15.124.129 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          BUILD_ROOT=/opt/pqc-nginx-build
+          OPENSSL_VERSION=3.5.7
+          NGINX_VERSION=1.24.0
+          PQC_CONF=/etc/nginx/conf.d/10-pqc-groups.conf
+          UNIT_OVERRIDE=/etc/systemd/system/nginx.service.d/pqc.conf
+          rollback_needed=0
+          rollback() {
+            status=$?
+            if [ "$rollback_needed" = 1 ]; then
+              echo 'Activation failed; restoring the packaged Nginx service configuration.' >&2
+              sudo rm -f "$PQC_CONF" "$UNIT_OVERRIDE"
+              sudo systemctl daemon-reload
+              sudo systemctl restart nginx || true
+            fi
+            exit "$status"
+          }
+          trap rollback ERR
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends build-essential ca-certificates curl libpcre2-dev perl zlib1g-dev
+          sudo rm -rf "$BUILD_ROOT"
+          sudo install -d -m 755 "$BUILD_ROOT"
+          sudo chown "$USER":"$USER" "$BUILD_ROOT"
+          cd "$BUILD_ROOT"
+          curl -fsSLO "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz"
+          curl -fsSLO "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz.sha256"
+          sha256sum -c "openssl-${OPENSSL_VERSION}.tar.gz.sha256"
+          curl -fsSLO "https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz"
+          tar -xzf "openssl-${OPENSSL_VERSION}.tar.gz"
+          tar -xzf "nginx-${NGINX_VERSION}.tar.gz"
+          cd "nginx-${NGINX_VERSION}"
+          ./configure \
+            --prefix=/usr/share/nginx \
+            --sbin-path=/usr/local/sbin/nginx-pqc \
+            --conf-path=/etc/nginx/nginx.conf \
+            --http-log-path=/var/log/nginx/access.log \
+            --error-log-path=/var/log/nginx/error.log \
+            --pid-path=/run/nginx.pid \
+            --lock-path=/var/lock/nginx.lock \
+            --modules-path=/usr/lib/nginx/modules \
+            --http-client-body-temp-path=/var/lib/nginx/body \
+            --http-fastcgi-temp-path=/var/lib/nginx/fastcgi \
+            --http-proxy-temp-path=/var/lib/nginx/proxy \
+            --http-scgi-temp-path=/var/lib/nginx/scgi \
+            --http-uwsgi-temp-path=/var/lib/nginx/uwsgi \
+            --with-openssl="$BUILD_ROOT/openssl-${OPENSSL_VERSION}" \
+            --with-http_ssl_module --with-http_v2_module --with-http_realip_module \
+            --with-http_stub_status_module --with-http_auth_request_module --with-threads --with-pcre-jit
+          make -j2
+          sudo install -m 755 objs/nginx /usr/local/sbin/nginx-pqc
+          /usr/local/sbin/nginx-pqc -V 2>&1 | grep -F "OpenSSL ${OPENSSL_VERSION}"
+          sudo install -d -m 755 /etc/nginx/conf.d /etc/systemd/system/nginx.service.d
+          printf '%s\n' 'ssl_ecdh_curve X25519MLKEM768:X25519:secp256r1;' | sudo tee "$PQC_CONF" >/dev/null
+          cat <<'UNIT' | sudo tee "$UNIT_OVERRIDE" >/dev/null
+          [Service]
+          ExecStartPre=
+          ExecStartPre=/usr/local/sbin/nginx-pqc -t -q -g 'daemon on; master_process on;'
+          ExecStart=
+          ExecStart=/usr/local/sbin/nginx-pqc -g 'daemon on; master_process on;'
+          ExecReload=
+          ExecReload=/bin/kill -s HUP $MAINPID
+          UNIT
+          rollback_needed=1
+          sudo systemctl daemon-reload
+          sudo /usr/local/sbin/nginx-pqc -t
+          sudo systemctl restart nginx
+          curl -fsS --max-time 10 http://127.0.0.1:3001/api/health
+          "$BUILD_ROOT/openssl-${OPENSSL_VERSION}/apps/openssl" s_client -connect 127.0.0.1:443 -servername 147.15.124.129 -tls1_3 -groups X25519MLKEM768 </dev/null 2>&1 | grep -F 'Server Temp Key: X25519MLKEM768'
+          sudo certbot renew --dry-run
+          rollback_needed=0
+          echo 'PQC-capable Nginx activated and locally verified.'
+          REMOTE
+      - name: Remove ephemeral private key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key ~/.ssh/known_hosts
