@@ -44,7 +44,7 @@ A porta da aplicação (`3001`) é publicada somente no loopback. Na borda, a Or
 | Firewall | UFW com entrada apenas para 22, 80 e 443; aplicação em `127.0.0.1:3001` |
 | Web server | Nginx no host como reverse proxy |
 | TLS | Certbot >= 5.4, certificado Let's Encrypt para IP, redirecionamento HTTP → HTTPS |
-| Validação TLS | Qualys SSL Labs: alvo Nota A e suporte PQC |
+| Validação TLS | HTTPS por IP, TLS 1.3 e grupo híbrido PQC `X25519MLKEM768`; evidências em `docs/tls-evidence-ip.md` e `docs/evidence/` |
 
 ## Segurança da aplicação e OWASP Top 10:2025
 
@@ -132,10 +132,41 @@ Nenhuma chave privada, senha, `.env` ou banco local é versionado. Configure `pr
 
 O `.gitignore` bloqueia `.env`, `.env.*`, bancos SQLite, `node_modules`, `dist` e arquivos de cobertura. Apenas templates sem valores reais (`.env.example` e `.env.docker.example`) são versionados.
 
-## Evidências finais a registrar
+## Checklist de entrega e evidências
 
-- URL HTTPS acessível e redirecionamento HTTP → HTTPS;
-- saída de `sudo nginx -t`, `sudo ufw status numbered` e `sudo fail2ban-client status sshd`;
-- execução verde do GitHub Actions após um push real;
-- relatório do SSL.org para o IP com `Certificate Trusted: YES` e assinatura aceitável;
-- resultado **Pass** do DigiCert PQC Checker para o IP, com captura em `docs/evidence/digicert-pqc-2026-09-14.png` e contexto técnico em `docs/tls-evidence-ip.md`;
+Esta checklist segue o escopo da disciplina. **Concluído** indica evidência versionada ou uma verificação externa registrada; **pendente** indica uma prova de terceiro que ainda precisa ser anexada, sem alegar conformidade sem evidência.
+
+### Eixo 1 — Cloud e infraestrutura
+
+- [x] **Cloud pública / Free Tier:** Oracle Cloud Free Tier com IP público. **Evidência:** [Acesso de produção](#acesso-de-produção) e [arquitetura](#arquitetura).
+- [x] **Sistema operacional suportado:** Ubuntu Server 24.04 LTS. **Evidência:** [Controles de infraestrutura](#controles-de-infraestrutura) e `docs/tls-evidence-ip.md`.
+- [x] **Web server obrigatório:** Nginx no host como reverse proxy para a aplicação Docker em `127.0.0.1:3001`. **Evidência:** [Arquitetura](#arquitetura) e `compose.host-nginx.yml`.
+- [x] **Aplicação pública por IP:** `https://147.15.124.129`. **Evidência:** [Acesso de produção](#acesso-de-produção), health check e `docs/tls-evidence-ip.md`.
+- [x] **Administração remota segura:** SSH por chave, sem login por senha/root. **Evidência:** [Controles de infraestrutura](#controles-de-infraestrutura).
+- [x] **Firewall e Fail2Ban:** portas 22/80/443 e Fail2Ban com 4 tentativas em 10 min / banimento de 24 h. **Evidência:** [Controles de infraestrutura](#controles-de-infraestrutura) e comandos de reprodução em `docs/tls-evidence-ip.md`.
+- [x] **HTTPS por IP + redirect HTTP → HTTPS:** certificado Let's Encrypt, Certbot e redirecionamento. **Evidência:** `docs/tls-evidence-ip.md`.
+- [x] **TLS 1.3 e PQC:** negociação real `X25519MLKEM768`; DigiCert PQC Checker retornou **Pass**. **Evidência:** `docs/tls-evidence-ip.md`, [captura do DigiCert](docs/evidence/digicert-pqc-2026-09-14.png) e [workflow de ativação](https://github.com/lhuanluz/pos-crud-mfa-demo/actions/runs/34890566508).
+- [ ] **SSL.org para certificado IP:** falta anexar o resultado com `Certificate Trusted: YES` e assinatura aceitável. **Ação:** executar contra `147.15.124.129` e adicionar a captura em `docs/evidence/`.
+
+### Eixo 2 — Repositório e segredos
+
+- [x] **Repositório público no GitHub:** [lhuanluz/pos-crud-mfa-demo](https://github.com/lhuanluz/pos-crud-mfa-demo).
+- [x] **README técnico:** este arquivo descreve arquitetura, execução, controles, OWASP, CI/CD e evidências.
+- [x] **Higiene de segredos:** `.gitignore` bloqueia `.env`, `.env.*`, SQLite, builds e cobertura; somente templates sem segredos são versionados. **Evidência:** [.gitignore](.gitignore), `.env.example`, `.env.docker.example` e job Gitleaks em `.github/workflows/ci.yml`.
+- [x] **Credencial de deploy protegida:** `SERVER_SSH_PRIVATE_KEY` é consumida como GitHub Actions Secret e removida ao final do job. **Evidência:** `.github/workflows/ci.yml`.
+
+### Eixo 3 — Aplicação e Secure by Design
+
+- [x] **Tela de login, área interna e logout:** implementados e cobertos pelo smoke test. **Evidência:** `src/`, rotas `/api/auth/login`, `/api/auth/verify-otp`, `/api/auth/logout` em `server/index.js` e `scripts/smoke.mjs`.
+- [x] **MFA obrigatório:** TOTP após validação de senha, com token temporário de 5 minutos. **Evidência:** `server/index.js` (`/api/auth/login` e `/api/auth/verify-otp`).
+- [x] **CRUD autenticado:** produtos exigem sessão; gestão de usuários/auditoria exige `admin`. **Evidência:** `requireAuth`, `requireAdmin` e rotas `/api/products`, `/api/users`, `/api/audit` em `server/index.js`.
+- [x] **Três ou mais categorias OWASP Top 10:2025 mitigadas:** Broken Access Control, Authentication Failures, Injection e Security Misconfiguration. **Evidência:** [Segurança da aplicação e OWASP Top 10:2025](#segurança-da-aplicação-e-owasp-top-102025) e `server/index.js`.
+- [x] **Desenvolvimento assistido por IA:** Hermes Agent, ambiente similar baseado em IA, usado para desenvolvimento, auditoria e documentação. **Evidência:** [Desenvolvimento assistido por IA](#desenvolvimento-assistido-por-ia).
+
+### CI/CD e validação
+
+- [x] **GitHub Actions em push para `main`:** validação e deploy automatizados. **Evidência:** `.github/workflows/ci.yml` e [run verde de validação/deploy](https://github.com/lhuanluz/pos-crud-mfa-demo/actions/runs/33424238582).
+- [x] **Validações automatizadas:** `npm ci`, lint, smoke test, build, `npm audit` (bloqueio high/critical), Gitleaks e Docker build. **Evidência:** `.github/workflows/ci.yml` e [Scripts e verificações](#scripts-e-verificações).
+- [x] **Versão exata promovida:** o deploy usa `github.sha`, faz `git reset --hard` nesse SHA e aguarda o health check. **Evidência:** `.github/workflows/ci.yml`.
+
+> Para a entrega, o único item explicitamente pendente nesta checklist é anexar a captura do **SSL.org**. O requisito de PQC já possui evidência técnica e evidência externa do DigiCert.
