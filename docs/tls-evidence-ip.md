@@ -64,7 +64,15 @@ Negotiated TLS1.3 group: X25519MLKEM768
 
 O certificado para o IP também foi renovado durante a operação; a validade observada passou a ser `14/09/2026 18:09:03 UTC` até `21/09/2026 10:09:02 UTC`.
 
-A evidência técnica demonstra PQC no endpoint. Para anexar uma evidência de terceiro exigida pela disciplina, execute também o DigiCert PQC Checker contra `147.15.124.129` e registre seu resultado nesta página.
+A evidência técnica demonstra PQC no endpoint. O **DigiCert PQC Checker** também foi executado externamente contra `147.15.124.129` em **14/09/2026 às 20:27:58** e retornou **Pass** para:
+
+- TLS 1.3 habilitado;
+- troca de chaves quantum-safe;
+- resultado geral do endpoint.
+
+A captura original do resultado está versionada em [`docs/evidence/digicert-pqc-2026-09-14.png`](evidence/digicert-pqc-2026-09-14.png).
+
+![DigiCert PQC Checker — Pass para 147.15.124.129](evidence/digicert-pqc-2026-09-14.png)
 
 ## Reproduzir verificações
 
