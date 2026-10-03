@@ -1,0 +1,44 @@
+name: Temporarily authorize review SSH key
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authorize:
+    name: Add temporary review key to Oracle VM
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Configure ephemeral deployment key
+        env:
+          SERVER_SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SERVER_SSH_PRIVATE_KEY" || { echo "Missing GitHub Secret: SERVER_SSH_PRIVATE_KEY" >&2; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SERVER_SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' \
+            '|1|y8UuPfnWkXQ9IIxPz4a0KXbKazE=|yLX1U0k1Y33Q6dVApiq3LhQ5Y2A= ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCFfuOwrRqSbFwAvt2ZfdS91E6UsZXYLud4cnt7YNFhf/qwewFlxcpJTQ4z1bV1LswrFpBvObfkRgwkjNQPUfhyCxcuzI5fnk+il+YMUfa1Wg+EDIc2cryj78rpjQOOEarq1ZZgVPrE0GxtAE2dKDhWaZ9Oupyc/Az0XOuV7K5sJruXzxt7QF1cMO4hTtmRtECboVA0A59kyxLpcwKEy5neRbYk1QH3ttbbZVZPs4GnIpXKxGee6mFp/gkfm1n2quGMVOa9SYONK2HPwy/zG6nWa7PlbcW/a15LL0+qvBPkeE3e3XhBvMgTakrlmhB3lUQyStH6yvBR7r/JTuZpwF6gYPBgBjxqvSW9b5c9fhh5wvLRu0/PVogeAtRFetezv/wICKkdGAg4If8ANjH6UcG8Zyxap8NmZ+suQWhDXmOXOY2VpZCE6QljMx/oXmj6Fn+FZ3f1qCLkyt9tsSmRMu+6rSHwdYxTXQ9OExzKcBL7YatjW71sm57jtsNU/fIXiC8=' \
+            '|1|DaoVt6nBelMPnAdbJZtNV431Lzs=|O7SpQiKJrW5JYNlIfHQ/muF06Ds= ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBCl5YMd/AuQZSGhQ7zdDl1cIxZLINY/9KtOedJgAQvtXbuOt06IbwodBfDXRq8XW30jhdMKUvPfW0MxPfcckX5Q=' \
+            '|1|0aBokjgUbVQc/9LtbcuvQVnJt+g=|OXnsykY00KPO3b0dGvLHGEFHVP0= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJcaB9TithhblxXxQhw2C/sw5DQBV5rXzUwZ5wJer9gmZ' > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Authorize temporary Hermes review key
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes ubuntu@147.15.124.129 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          key='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOQpOvY0oOOCvwaiGst+cx3QAVJjmUOjPfh3IqjRw9zO hermes-pos-crud-mfa-review'
+          install -d -m 700 ~/.ssh
+          touch ~/.ssh/authorized_keys
+          chmod 600 ~/.ssh/authorized_keys
+          grep -qxF "$key" ~/.ssh/authorized_keys || printf '%s\n' "$key" >> ~/.ssh/authorized_keys
+          ssh-keygen -lf ~/.ssh/authorized_keys | grep -F 'hermes-pos-crud-mfa-review'
+          REMOTE
+      - name: Remove ephemeral deployment key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key ~/.ssh/known_hosts
