@@ -8,9 +8,10 @@ import Database from 'better-sqlite3'
 const port = '3011'
 const base = `http://127.0.0.1:${port}`
 const smokePassword = `Smoke-${crypto.randomUUID()}!`
+const evaluatorPassword = `Evaluator-${crypto.randomUUID()}!`
 const smokeDir = mkdtempSync(path.join(tmpdir(), 'pos-crud-mfa-smoke-'))
 const smokeDbPath = path.join(smokeDir, 'data.db')
-const env = { ...process.env, PORT: port, DB_PATH: smokeDbPath, JWT_SECRET: crypto.randomUUID(), ADMIN_EMAIL: 'admin@example.test', ADMIN_PASSWORD: smokePassword, COOKIE_SECURE: 'false' }
+const env = { ...process.env, PORT: port, DB_PATH: smokeDbPath, JWT_SECRET: crypto.randomUUID(), ADMIN_EMAIL: 'admin@example.test', ADMIN_PASSWORD: smokePassword, EVALUATOR_EMAIL: 'reviewer@example.test', EVALUATOR_PASSWORD: evaluatorPassword, COOKIE_SECURE: 'false' }
 const child = spawn('node', ['server/index.js'], { env, stdio: ['ignore', 'pipe', 'pipe'] })
 let cookie = ''
 const wait = (ms) => new Promise(r => setTimeout(r, ms))
@@ -36,7 +37,12 @@ try {
   const users = await request('/api/users')
   const audit = await request('/api/audit')
   await request('/api/auth/logout', { method:'POST' })
-  console.log(JSON.stringify({ health:'ok', loginMfa: login.mfaRequired, httpOnlyCookie: true, productCrud:'ok', userCount:users.length, auditEvents:audit.length, updatedPrice:updated.price }, null, 2))
+  const evaluator = await request('/api/auth/login', { method:'POST', body: JSON.stringify({ email:env.EVALUATOR_EMAIL, password:evaluatorPassword }) })
+  if (evaluator.mfaRequired || evaluator.user.role !== 'reviewer' || !cookie.startsWith('crud_mfa_session=')) throw new Error('reviewer must authenticate without MFA using an HttpOnly session cookie')
+  const forbidden = await fetch(base + '/api/users', { headers: { Cookie: cookie } })
+  if (forbidden.status !== 403) throw new Error(`reviewer should not access admin routes: ${forbidden.status}`)
+  await request('/api/auth/logout', { method:'POST' })
+  console.log(JSON.stringify({ health:'ok', loginMfa: login.mfaRequired, evaluatorPasswordOnly: !evaluator.mfaRequired, httpOnlyCookie: true, productCrud:'ok', userCount:users.length, auditEvents:audit.length, updatedPrice:updated.price }, null, 2))
 } finally {
   child.kill('SIGTERM')
   rmSync(smokeDir, { recursive: true, force: true })

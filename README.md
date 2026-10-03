@@ -59,6 +59,10 @@ A aplicação mitiga, no mínimo, estas categorias da OWASP Top 10:2025:
 
 Outros controles: logs de auditoria para login/MFA/logout/CRUD, CORS restrito em produção, cookie `Secure` habilitado no HTTPS e segredo/ambiente real fora do Git.
 
+### Conta técnica de avaliação automatizada
+
+O escopo de entrega pede `usuário;senha` para que o corretor automatizado acesse a aplicação. Quando `EVALUATOR_EMAIL` e `EVALUATOR_PASSWORD` são configurados juntos no ambiente de produção, a aplicação provisiona uma única conta de perfil `reviewer`: ela autentica somente com senha, não tem privilégios administrativos e não pode acessar usuários ou auditoria. MFA continua obrigatório para administrador e usuários normais; o fluxo MFA completo deve ser demonstrado no vídeo. As credenciais da conta técnica ficam exclusivamente no `.env.docker` protegido e devem ser removidas após a correção.
+
 ## Desenvolvimento assistido por IA
 
 O desenvolvimento, depuração, auditoria de código e documentação técnica foram realizados com **Hermes Agent**, um ambiente similar baseado em IA, atendendo ao requisito de codificação assistida por IA. As decisões foram validadas com build TypeScript/Vite, smoke test de API e verificações operacionais no servidor.

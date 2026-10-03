@@ -22,7 +22,9 @@ const COOKIE_NAME = 'crud_mfa_session'
 const INSECURE_PLACEHOLDERS = new Set([
   'GENERATE_A_LONG_RANDOM_SECRET_BEFORE_RUNNING',
   'GENERATE_A_STRONG_ADMIN_PASSWORD',
+  'GENERATE_A_STRONG_EVALUATOR_PASSWORD',
   'YOUR_ADMIN_EMAIL',
+  'EVALUATOR_EMAIL_FOR_AUTOMATED_REVIEW',
   ['troque', 'este', 'segredo', 'em', 'producao'].join('-'),
   ['troque', 'este', 'segredo', 'antes', 'do', 'deploy'].join('-'),
   ['dev', 'only', 'change', 'me'].join('-'),
@@ -43,6 +45,17 @@ function requiredBooleanEnv(name, fallback) {
   if (!value) return fallback
   if (value !== 'true' && value !== 'false') throw new Error(`Variável booleana inválida: ${name}`)
   return value === 'true'
+}
+
+function optionalEvaluatorCredentials() {
+  const email = process.env.EVALUATOR_EMAIL?.trim().toLowerCase()
+  const password = process.env.EVALUATOR_PASSWORD
+  if (!email && !password) return null
+  if (!email || !password) throw new Error('EVALUATOR_EMAIL e EVALUATOR_PASSWORD devem ser configurados juntos')
+  if (INSECURE_PLACEHOLDERS.has(email) || INSECURE_PLACEHOLDERS.has(password)) throw new Error('Credenciais de avaliador contêm placeholder inseguro')
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('EVALUATOR_EMAIL deve ser um e-mail válido')
+  if (password.length < 16) throw new Error('EVALUATOR_PASSWORD deve ter pelo menos 16 caracteres')
+  return { email, password }
 }
 
 const JWT_SECRET = requiredEnv('JWT_SECRET')
@@ -82,6 +95,7 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT NOT NULL DEFAULT 'operator',
   mfa_secret TEXT,
   mfa_enabled INTEGER NOT NULL DEFAULT 0,
+  mfa_required INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -110,6 +124,11 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 );
 `)
 
+const userColumns = db.prepare('PRAGMA table_info(users)').all()
+if (!userColumns.some(column => column.name === 'mfa_required')) {
+  db.exec('ALTER TABLE users ADD COLUMN mfa_required INTEGER NOT NULL DEFAULT 1')
+}
+
 const countUsers = db.prepare('SELECT COUNT(*) as total FROM users').get().total
 if (countUsers === 0) {
   const email = requiredEnv('ADMIN_EMAIL').toLowerCase()
@@ -118,6 +137,18 @@ if (countUsers === 0) {
   if (password.length < 12) throw new Error('ADMIN_PASSWORD deve ter pelo menos 12 caracteres')
   db.prepare('INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)')
     .run('Administrador', email, bcrypt.hashSync(password, 12), 'admin')
+}
+const evaluator = optionalEvaluatorCredentials()
+if (evaluator) {
+  const existing = db.prepare('SELECT id, role FROM users WHERE email = ?').get(evaluator.email)
+  if (existing && existing.role !== 'reviewer') throw new Error('EVALUATOR_EMAIL já pertence a uma conta que não é de avaliação')
+  if (existing) {
+    db.prepare('UPDATE users SET password_hash=?, role=?, mfa_secret=NULL, mfa_enabled=0, mfa_required=0, updated_at=CURRENT_TIMESTAMP WHERE id=?')
+      .run(bcrypt.hashSync(evaluator.password, 12), 'reviewer', existing.id)
+  } else {
+    db.prepare('INSERT INTO users (name, email, password_hash, role, mfa_required) VALUES (?, ?, ?, ?, ?)')
+      .run('Avaliador automatizado', evaluator.email, bcrypt.hashSync(evaluator.password, 12), 'reviewer', 0)
+  }
 }
 const countProducts = db.prepare('SELECT COUNT(*) as total FROM products').get().total
 if (countProducts === 0) {
@@ -132,7 +163,7 @@ const userSchema = z.object({ name: z.string().min(2), email: z.string().email()
 const productSchema = z.object({ name: z.string().min(2), sku: z.string().min(2), price: z.coerce.number().nonnegative(), stock: z.coerce.number().int().nonnegative(), description: z.string().optional().nullable() })
 
 function publicUser(row) {
-  return { id: row.id, name: row.name, email: row.email, role: row.role, mfaEnabled: Boolean(row.mfa_enabled), createdAt: row.created_at, updatedAt: row.updated_at }
+  return { id: row.id, name: row.name, email: row.email, role: row.role, mfaEnabled: Boolean(row.mfa_enabled), mfaRequired: Boolean(row.mfa_required), createdAt: row.created_at, updatedAt: row.updated_at }
 }
 function signSession(user) { return jwt.sign({ sub: user.id, email: user.email, role: user.role, type: 'session' }, JWT_SECRET, { expiresIn: '8h' }) }
 function signTemp(userId) { return jwt.sign({ sub: userId, type: 'mfa' }, JWT_SECRET, { expiresIn: '5m' }) }
@@ -183,6 +214,12 @@ app.post('/api/auth/login', async (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(body.email.toLowerCase())
   if (!user || !bcrypt.compareSync(body.password, user.password_hash)) { audit(req, { action: 'login_failed', entity: 'auth', success: false, details: { email: body.email.toLowerCase() }, actor: user }); return res.status(401).json({ error: 'Credenciais inválidas' }) }
   audit(req, { action: 'password_validated', entity: 'auth', success: true, actor: user })
+  if (!user.mfa_required) {
+    const sessionToken = signSession(user)
+    setSessionCookie(res, sessionToken)
+    audit(req, { action: 'login_success', entity: 'auth', success: true, details: { mfa: 'not_required_for_reviewer' }, actor: user })
+    return res.json({ mfaRequired: false, user: publicUser(user) })
+  }
   let setup = null
   if (!user.mfa_enabled || !user.mfa_secret) {
     const secret = speakeasy.generateSecret({ name: `CRUD MFA Demo (${user.email})`, issuer: 'POS CRUD MFA Demo' })
