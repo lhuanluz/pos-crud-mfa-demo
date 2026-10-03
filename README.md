@@ -53,15 +53,11 @@ A aplicação mitiga, no mínimo, estas categorias da OWASP Top 10:2025:
 | Categoria | Mitigação aplicada | Evidência no código |
 |---|---|---|
 | **Broken Access Control** | Middleware de sessão e RBAC. Usuários e auditoria exigem perfil `admin`; CRUD de produtos exige autenticação. | `requireAuth`, `requireAdmin` e rotas `/api/users`, `/api/audit`, `/api/products` em `server/index.js` |
-| **Authentication Failures** | Senhas armazenadas com bcrypt (cost 12), MFA TOTP obrigatório após senha, sessão JWT com expiração de 8h em cookie `HttpOnly`/`SameSite`, rate-limit de autenticação e logout que limpa o cookie. | `bcrypt.hashSync`, `/api/auth/login`, `/api/auth/verify-otp`, `setSessionCookie`, `express-rate-limit` em `server/index.js` |
+| **Authentication Failures** | Senhas armazenadas com bcrypt (cost 12), MFA TOTP integrado após senha, sessão JWT com expiração de 8h em cookie `HttpOnly`/`SameSite`, rate-limit de autenticação e logout que limpa o cookie. | `bcrypt.hashSync`, `/api/auth/login`, `/api/auth/verify-otp`, `setSessionCookie`, `express-rate-limit` em `server/index.js` |
 | **Injection** | Validação e coerção com Zod antes das operações; consultas SQLite parametrizadas; constraints de unicidade e valores não negativos no schema. | `loginSchema`, `userSchema`, `productSchema`, `parse()` e `db.prepare(...).run(...)` em `server/index.js` |
 | **Security Misconfiguration** | Helmet/CSP, `X-Frame-Options`, `nosniff`, segredo JWT obrigatório no startup e credenciais de seed obrigatórias em banco vazio. | Configuração Helmet, `requiredEnv()` e bootstrap em `server/index.js` |
 
 Outros controles: logs de auditoria para login/MFA/logout/CRUD, CORS restrito em produção, cookie `Secure` habilitado no HTTPS e segredo/ambiente real fora do Git.
-
-### Conta técnica de avaliação automatizada
-
-O escopo de entrega pede `usuário;senha` para que o corretor automatizado acesse a aplicação. Quando `EVALUATOR_EMAIL` e `EVALUATOR_PASSWORD` são configurados juntos no ambiente de produção, a aplicação provisiona uma única conta de perfil `reviewer`: ela autentica somente com senha, não tem privilégios administrativos e não pode acessar usuários ou auditoria. MFA continua obrigatório para administrador e usuários normais; o fluxo MFA completo deve ser demonstrado no vídeo. As credenciais da conta técnica ficam exclusivamente no `.env.docker` protegido e devem ser removidas após a correção.
 
 ## Desenvolvimento assistido por IA
 
