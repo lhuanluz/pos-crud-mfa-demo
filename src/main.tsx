@@ -88,13 +88,13 @@ function Docs(){
     { where:'Servidor HTTP', name:'Headers + CSP com Helmet', control:'Aplica cabeçalhos de segurança e política CSP.', detail:'Inclui frame-ancestors none, object-src none, default-src self e upgrade-insecure-requests em produção.', status:'Novo' },
     { where:'Banco / integridade', name:'Constraints SQLite', control:'Evita duplicidade e valores inválidos.', detail:'E-mail e SKU são únicos; preço e estoque não podem ser negativos.', status:'Implementado' },
     { where:'Banco / auditoria', name:'Trilha auditável', control:'Registra login, falha de login/MFA, logout e CRUDs.', detail:'Eventos guardam ator, ação, entidade, status, IP, user-agent e detalhes não sensíveis.', status:'Novo' },
-    { where:'Perímetro / deploy', name:'Reverse proxy HTTPS', control:'Projeto recebeu exemplo Caddy para publicar só 80/443.', detail:'A aplicação deve ficar em 127.0.0.1 atrás do proxy; banco e porta Node não devem ser expostos.', status:'Preparado' },
+    { where:'Perímetro / deploy', name:'Reverse proxy HTTPS', control:'Nginx no host Ubuntu publica somente 80/443.', detail:'A aplicação fica em 127.0.0.1 atrás do proxy; banco e porta Node não são expostos à internet.', status:'Implementado' },
   ]
   const map = [
     { zone:'Navegador', items:['Área logada', 'sem token no JS', 'credentials include'], note:'Controla experiência e envia cookie automaticamente.' },
     { zone:'Auth API', items:['bcrypt', 'MFA OTP', 'tempToken 5min', 'rate limit', 'audit login'], note:'Protege o processo de entrada no sistema.' },
     { zone:'Business API', items:['requireAuth', 'requireAdmin', 'Zod', 'audit CRUD'], note:'Protege usuários, produtos e auditoria.' },
-    { zone:'HTTP/Perímetro', items:['Helmet', 'CSP', 'Caddyfile', 'TLS no proxy'], note:'Reduz exposição HTTP e prepara publicação segura.' },
+    { zone:'HTTP/Perímetro', items:['Helmet', 'CSP', 'Nginx', 'TLS no proxy'], note:'Reduz exposição HTTP e protege a publicação pública.' },
     { zone:'Banco SQLite', items:['unique email', 'unique SKU', 'CHECK preço/estoque', 'audit_logs'], note:'Mantém integridade e trilha de eventos.' },
   ]
   return <section className="controls-page">
@@ -163,7 +163,7 @@ function Docs(){
       <div className="section-heading"><LockKeyhole/><div><h3>O que ainda depende do deploy público</h3><p>O código está preparado, mas a validação final exige domínio/HTTPS reais.</p></div></div>
       <div className="gap-grid">
         <div><strong>Domínio</strong><p>Apontar um domínio público para o host escolhido.</p></div>
-        <div><strong>TLS</strong><p>Subir reverse proxy Caddy/Nginx com certificado válido.</p></div>
+        <div><strong>TLS</strong><p>Nginx no host Ubuntu com certificado válido e redirecionamento para HTTPS.</p></div>
         <div><strong>Exposição</strong><p>Publicar apenas 80/443; manter Node e banco privados.</p></div>
         <div><strong>Validação</strong><p>Testar DNS, certificado, headers, CSP, cookie Secure e health público.</p></div>
       </div>

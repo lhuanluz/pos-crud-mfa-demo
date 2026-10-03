@@ -146,7 +146,7 @@ Esta checklist segue o escopo da disciplina. **Concluído** indica evidência ve
 - [x] **Firewall e Fail2Ban:** portas 22/80/443 e Fail2Ban com 4 tentativas em 10 min / banimento de 24 h. **Evidência:** [Controles de infraestrutura](#controles-de-infraestrutura) e comandos de reprodução em `docs/tls-evidence-ip.md`.
 - [x] **HTTPS por IP + redirect HTTP → HTTPS:** certificado Let's Encrypt, Certbot e redirecionamento. **Evidência:** `docs/tls-evidence-ip.md`.
 - [x] **TLS 1.3 e PQC:** negociação real `X25519MLKEM768`; DigiCert PQC Checker retornou **Pass**. **Evidência:** `docs/tls-evidence-ip.md`, [captura do DigiCert](docs/evidence/digicert-pqc-2026-09-14.png) e [workflow de ativação](https://github.com/lhuanluz/pos-crud-mfa-demo/actions/runs/34890566508).
-- [ ] **SSL.org para certificado IP:** falta anexar o resultado com `Certificate Trusted: YES` e assinatura aceitável. **Ação:** executar contra `147.15.124.129` e adicionar a captura em `docs/evidence/`.
+- [x] **SSL.org para certificado IP:** resultado externo para `147.15.124.129` confirmou `Certificate Trusted: Yes`, cadeia válida/completa e `sha384 / EC 256 bits (secp256r1) · Good signature · Good key`. **Evidência:** [registro](docs/evidence/ssl-org-ip-2026-10-03.md) e [captura](docs/evidence/ssl-org-ip-2026-10-03.png).
 
 ### Eixo 2 — Repositório e segredos
 
@@ -165,8 +165,8 @@ Esta checklist segue o escopo da disciplina. **Concluído** indica evidência ve
 
 ### CI/CD e validação
 
-- [x] **GitHub Actions em push para `main`:** validação e deploy automatizados. **Evidência:** `.github/workflows/ci.yml` e [run verde de validação/deploy](https://github.com/lhuanluz/pos-crud-mfa-demo/actions/runs/33424238582).
+- [x] **GitHub Actions em push para `main`:** validação e deploy automatizados. **Evidência:** `.github/workflows/ci.yml` e [run verde de validação/deploy](https://github.com/lhuanluz/pos-crud-mfa-demo/actions/runs/34968436812).
 - [x] **Validações automatizadas:** `npm ci`, lint, smoke test, build, `npm audit` (bloqueio high/critical), Gitleaks e Docker build. **Evidência:** `.github/workflows/ci.yml` e [Scripts e verificações](#scripts-e-verificações).
 - [x] **Versão exata promovida:** o deploy usa `github.sha`, faz `git reset --hard` nesse SHA e aguarda o health check. **Evidência:** `.github/workflows/ci.yml`.
 
-> Para a entrega, o único item explicitamente pendente nesta checklist é anexar a captura do **SSL.org**. O requisito de PQC já possui evidência técnica e evidência externa do DigiCert.
+> A checklist possui evidências para todos os requisitos técnicos declarados. Antes da submissão, revalide os testes externos caso haja renovação de certificado ou alteração no servidor.

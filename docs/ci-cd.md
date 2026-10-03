@@ -67,18 +67,17 @@ npm run security:audit
 docker build --pull --no-cache --tag pos-crud-mfa-demo:ci .
 ```
 
-## Evidência coletada neste ajuste
+## Evidência de validação
 
-Validações locais executadas em 2026-08-31:
+Validações locais executadas na revisão final:
 
-- `npm ci`: passou, 278 pacotes instalados, 0 vulnerabilidades.
+- `npm ci`: instalação reprodutível concluída.
 - `npm run lint`: passou (`tsc --noEmit`).
-- `npm test`: passou; smoke retornou `health: ok`, `loginMfa: true`, `httpOnlyCookie: true`, `productCrud: ok`, `auditEvents: 6`.
+- `npm test`: passou; smoke validou health check, login com MFA, cookie `HttpOnly`, CRUD e auditoria.
 - `npm run build`: passou; bundle Vite gerado.
-- `npm run security:audit`: passou com 0 vulnerabilidades.
-- Validação sintática dos YAMLs via Ruby Psych: `ci.yml` e `deploy.yml` carregaram sem erro.
+- `npm run security:audit`: passou no critério configurado (`--audit-level=high`).
+- `docker build --pull --no-cache`: imagem de produção construída com sucesso.
 
-Validações reais no GitHub Actions em 2026-08-31:
+Validação real no GitHub Actions:
 
-- Run CI `33402917384`: sucesso. Job “Install, lint, test, build and scan” passou em `npm ci`, lint/typecheck, smoke test, build, dependency audit, Gitleaks e Docker image build check.
-- Run Deploy `33402996798`: falhou antes de qualquer SSH/deploy porque os secrets obrigatórios (`SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_PRIVATE_KEY`, `SERVER_SSH_KNOWN_HOSTS`, `APP_PATH`) não estavam configurados no ambiente/repositório. Isso bloqueou promoção sem expor credenciais.
+- [Run 34968436812](https://github.com/lhuanluz/pos-crud-mfa-demo/actions/runs/34968436812), para o commit `be1a641`: sucesso. O job de validação passou em `npm ci`, lint/typecheck, smoke test, build, auditoria de dependências, Gitleaks e build Docker. O job de deploy autenticou por SSH, implantou a revisão validada e confirmou o health check no Oracle Cloud.

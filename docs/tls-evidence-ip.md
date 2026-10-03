@@ -27,6 +27,12 @@ HTTP 200
 | SAN do certificado | `IP Address: 147.15.124.129` |
 | Janela observada do certificado | 31/08/2026 13:18:16 GMT a 07/09/2026 05:18:15 GMT |
 
+## Validação SSL.org em 03 de outubro de 2026
+
+O [SSL Certificate Checker — SSL.org](https://www.ssl.org/) foi executado contra `147.15.124.129:443`. O resultado confirmou `Certificate Trusted: Yes`, correspondência do endereço, cadeia válida/completa, emissor Let's Encrypt e `sha384 / EC 256 bits (secp256r1) · Good signature · Good key`.
+
+A evidência completa e os campos retornados pelo teste estão em [`docs/evidence/ssl-org-ip-2026-10-03.md`](evidence/ssl-org-ip-2026-10-03.md). Essa validação atende ao critério do escopo para certificado em endereço IP público.
+
 ## Evidências no servidor Oracle
 
 | Controle | Evidência coletada |
